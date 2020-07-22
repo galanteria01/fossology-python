@@ -4,9 +4,9 @@
 import json
 import time
 import logging
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, TryAgain
 
-from fossology.obj import Upload, Summary, get_options
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, TryAgain
+from fossology.obj import Upload, Summary, Licenses, get_options
 from fossology.exceptions import AuthorizationError, FossologyApiError
 
 logger = logging.getLogger(__name__)
@@ -181,7 +181,7 @@ class Uploads:
             try:
                 upload = self.detail_upload(response.json()["message"])
                 logger.info(
-                    f"Upload {upload.uploadname} ({upload.filesize}) "
+                    f"Upload {upload.uploadname} ({upload.hash.size}) "
                     f"has been uploaded on {upload.uploaddate}"
                 )
                 return upload
@@ -244,6 +244,8 @@ class Uploads:
 
         API Endpoint: GET /uploads/{id}/licenses
 
+        The response does not generate Python objects yet, the plain JSON data is simply returned.
+
         :param upload: the upload to gather data from
         :param agent: the license agents to use (e.g. "nomos,monk,ninka,ojo,reportImport", default: "nomos")
         :param containers: wether to show containers or not (default: False)
@@ -252,8 +254,8 @@ class Uploads:
         :type agent: string
         :type containers: boolean
         :type group: string
-        :return: the licenses found by the specified agent
-        :rtype: list of licenses as JSON object
+        :return: the list of licenses findings for the specified agent
+        :rtype: list of Licenses
         :raises FossologyApiError: if the REST call failed
         :raises AuthorizationError: if the user can't access the group
         """
@@ -272,7 +274,12 @@ class Uploads:
         )
 
         if response.status_code == 200:
-            return response.json()
+            all_licenses = []
+            scanned_files = response.json()
+            for file_with_findings in scanned_files:
+                file_licenses = Licenses.from_json(file_with_findings)
+                all_licenses.append(file_licenses)
+            return all_licenses
 
         elif response.status_code == 403:
             description = f"Getting license for upload {upload.id} {get_options(group)}not authorized"
@@ -365,7 +372,7 @@ class Uploads:
             for upload in response.json():
                 uploads_list.append(Upload.from_json(upload))
             logger.info(
-                f"Retrieved page {page} of uploads, {response.headers.get('x-total-pages', 'Unknown')} pages are in total available"
+                f"Retrieved page {page} of uploads, {response.headers.get('X-TOTAL-PAGES', 'Unknown')} pages are in total available"
             )
             return uploads_list
 

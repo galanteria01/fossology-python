@@ -12,9 +12,9 @@ from fossology.exceptions import AuthorizationError, FossologyApiError
 
 def test_upload_sha1(upload: Upload):
     assert upload.uploadname == "base-files_11.tar.xz"
-    assert upload.filesha1 == "D4D663FC2877084362FB2297337BE05684869B00"
+    assert upload.hash.sha1 == "D4D663FC2877084362FB2297337BE05684869B00"
     assert (
-        f"Upload '{upload.uploadname}' ({upload.id}, {upload.filesize}B, {upload.filesha1}) "
+        f"Upload '{upload.uploadname}' ({upload.id}, {upload.hash.size}B, {upload.hash.sha1}) "
         f"in folder {upload.foldername} ({upload.folderid})"
     ) in str(upload)
 
@@ -290,16 +290,22 @@ def test_upload_licenses_error(foss_server: str, foss: Fossology, upload: Upload
 def test_upload_licenses(foss: Fossology, scanned_upload: Upload):
     licenses = foss.upload_licenses(scanned_upload)
     assert len(licenses) == 56
+    assert (
+        "File base-files_11.tar.xz/base-files-11/share/staff-group-for-usr-local doesn't have any concluded license yet"
+        in str(licenses[0])
+    )
 
 
 def test_upload_licenses_containers(foss: Fossology, scanned_upload: Upload):
     licenses = foss.upload_licenses(scanned_upload, containers=True)
     assert len(licenses) == 56
+    assert len(licenses[0].findings.scanner) == 1
+    assert not licenses[0].findings.conclusion
 
 
 def test_upload_licenses_unscheduled(foss: Fossology, scanned_upload: Upload):
     licenses = foss.upload_licenses(scanned_upload, agent="ojo")
-    assert not licenses[0].get("agentFindings")
+    assert not licenses[0].findings.scanner
 
 
 def test_upload_licenses_from_agent(foss: Fossology, scanned_upload: Upload):
@@ -324,8 +330,7 @@ def test_delete_unknown_upload(foss: Fossology):
         "",
         "Non Upload",
         "2020-05-05",
-        "0",
-        "sha",
+        {"sha1": "", "md5": "", "sha256": "", "size": 1},
     )
     with pytest.raises(FossologyApiError):
         foss.delete_upload(upload)

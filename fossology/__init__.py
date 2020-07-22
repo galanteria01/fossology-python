@@ -6,7 +6,8 @@ import logging
 import requests
 from datetime import date, timedelta
 
-from fossology.obj import Agents, User, TokenScope, SearchTypes, get_options
+from typing import List
+from fossology.obj import Agents, User, File, TokenScope, SearchTypes, get_options
 from fossology.folders import Folders
 from fossology.uploads import Uploads
 from fossology.jobs import Jobs
@@ -282,4 +283,47 @@ class Fossology(Folders, Uploads, Jobs, Report):
 
         else:
             description = "Unable to get a result with the given search criteria"
+            raise FossologyApiError(description, response)
+
+    def filesearch(
+        self, filelist: List = [], group: str = None,
+    ):
+        """Search for files from hash sum
+
+        API Endpoint: POST /filesearch
+
+        The response does not generate Python objects yet, the plain JSON data is simply returned.
+
+        :param filelist: the list of files (or containers) to search for (default: [])
+        :param group: the group name to choose while performing search (default: None)
+        :type filelist: list
+        :return: list of items corresponding to the search criteria
+        :type group: string
+        :rtype: JSON
+        :raises FossologyApiError: if the REST call failed
+        :raises AuthorizationError: if the user can't access the group
+        """
+        headers = {}
+        if group:
+            headers["groupName"] = group
+
+        response = self.session.post(
+            f"{self.api}/filesearch", headers=headers, json=filelist
+        )
+
+        if response.status_code == 200:
+            all_files = []
+            for hash_file in response.json():
+                if hash_file.get("findings"):
+                    all_files.append(File.from_json(hash_file))
+                else:
+                    return "Unable to get a result with the given filesearch criteria"
+            return all_files
+
+        elif response.status_code == 403:
+            description = f"Searching {get_options(group)}not authorized"
+            raise AuthorizationError(description, response)
+
+        else:
+            description = "Unable to get a result with the given filesearch criteria"
             raise FossologyApiError(description, response)
