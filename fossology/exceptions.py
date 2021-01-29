@@ -1,4 +1,4 @@
-# Copyright 2019-2020 Siemens AG
+# Copyright 2019-2021 Siemens AG
 # SPDX-License-Identifier: MIT
 
 from json.decoder import JSONDecodeError
@@ -13,12 +13,15 @@ class Error(Exception):
 class AuthenticationError(Error):
     """Authentication error"""
 
-    def __init__(self, url):
-        self.url = url
-        self.message = (
-            f"An error occurred during authentication against {self.url}\n"
-            f"Check your API Token and try again"
-        )
+    def __init__(self, description, response=None):
+        if response:
+            try:
+                message = response.json().get("message")
+            except JSONDecodeError:
+                message = response.text
+            self.message = f"{description}: {message} ({response.status_code})"
+        else:
+            self.message = description
 
 
 class AuthorizationError(Error):
@@ -33,11 +36,18 @@ class AuthorizationError(Error):
 
 
 class FossologyApiError(Error):
-    """Error during a Fossology GET request"""
+    """Error during a Fossology request"""
 
-    def __init__(self, description, response):
+    def __init__(self, description, response=None):
         try:
             message = response.json().get("message")
         except JSONDecodeError:
             message = response.text
         self.message = f"{description}: {message} ({response.status_code})"
+
+
+class FossologyUnsupported(Error):
+    """Endpoint or option not supported"""
+
+    def __init__(self, description):
+        self.message = description
